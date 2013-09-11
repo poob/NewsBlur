@@ -50,7 +50,6 @@ HELLO_EMAIL  = 'hello@newsblur.com'
 NEWSBLUR_URL = 'http://www.newsblur.com'
 SECRET_KEY            = 'YOUR_SECRET_KEY'
 
-
 # ===================
 # = Global Settings =
 # ===================
@@ -66,15 +65,17 @@ SITE_ID               = 1
 USE_I18N              = False
 LOGIN_REDIRECT_URL    = '/'
 LOGIN_URL             = '/reader/login'
+MEDIA_URL             = '/media/'
 # URL prefix for admin media -- CSS, JavaScript and images. Make sure to use a
 # trailing slash.
 # Examples: "http://foo.com/media/", "/media/".
 ADMIN_MEDIA_PREFIX    = '/media/admin/'
-EMAIL_BACKEND         = 'django.core.mail.backends.console.EmailBackend'
 CIPHER_USERNAMES      = False
 DEBUG_ASSETS          = DEBUG
 HOMEPAGE_USERNAME     = 'popular'
 ALLOWED_HOSTS         = ['*']
+AUTO_PREMIUM_NEW_USERS = False
+AUTO_ENABLE_NEW_USERS = False
 
 # ===============
 # = Enviornment =
@@ -103,6 +104,7 @@ MIDDLEWARE_CLASSES = (
     'apps.profile.middleware.TimingMiddleware',
     'apps.profile.middleware.LastSeenMiddleware',
     'apps.profile.middleware.SQLLogToConsoleMiddleware',
+    'apps.profile.middleware.UserAgentBanMiddleware',
     'subdomains.middleware.SubdomainMiddleware',
     'apps.profile.middleware.SimpsonsMiddleware',
     'apps.profile.middleware.ServerHostnameMiddleware',
@@ -185,6 +187,7 @@ LOGGING = {
 # ==========================
 
 DAYS_OF_UNREAD          = 14
+DAYS_OF_UNREAD_NEW      = 30
 SUBSCRIBER_EXPIRE       = 2
 
 AUTH_PROFILE_MODULE     = 'newsblur.UserProfile'
@@ -195,12 +198,17 @@ INTERNAL_IPS            = ('127.0.0.1',)
 LOGGING_LOG_SQL         = True
 APPEND_SLASH            = False
 SOUTH_TESTS_MIGRATE     = False
-SESSION_ENGINE          = "django.contrib.sessions.backends.db"
+SESSION_ENGINE          = 'redis_sessions.session'
 TEST_RUNNER             = "utils.testrunner.TestRunner"
 SESSION_COOKIE_NAME     = 'newsblur_sessionid'
 SESSION_COOKIE_AGE      = 60*60*24*365*2 # 2 years
 SESSION_COOKIE_DOMAIN   = '.newsblur.com'
 SENTRY_DSN              = 'https://XXXNEWSBLURXXX@app.getsentry.com/99999999'
+
+if not DEVELOPMENT:
+    EMAIL_BACKEND = 'django_mailgun.MailgunBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # ==============
 # = Subdomains =
@@ -361,7 +369,7 @@ CELERYBEAT_SCHEDULE = {
     },
     'share-popular-stories': {
         'task': 'share-popular-stories',
-        'schedule': datetime.timedelta(hours=1),
+        'schedule': datetime.timedelta(minutes=10),
         'options': {'queue': 'beat_tasks'},
     },
     'clean-analytics': {
@@ -376,7 +384,7 @@ CELERYBEAT_SCHEDULE = {
     },
     'activate-next-new-user': {
         'task': 'activate-next-new-user',
-        'schedule': datetime.timedelta(minutes=1),
+        'schedule': datetime.timedelta(minutes=5),
         'options': {'queue': 'beat_tasks'},
     },
 }
@@ -386,11 +394,11 @@ CELERYBEAT_SCHEDULE = {
 # =========
 
 MONGO_DB = {
-    'host': '127.0.0.1:27017',
+    'host': 'db_mongo:27017',
     'name': 'newsblur',
 }
 MONGO_ANALYTICS_DB = {
-    'host': '127.0.0.1:27017',
+    'host': 'db_mongo_analytics:27017',
     'name': 'nbanalytics',
 }
 
@@ -425,15 +433,23 @@ class MasterSlaveRouter(object):
 # =========
 
 REDIS = {
-    'host': 'db12',
+    'host': 'db_redis',
 }
+REDIS_PUBSUB = {
+    'host': 'db_redis_pubsub',
+}
+REDIS_STORY = {
+    'host': 'db_redis_story',
+}
+
+CELERY_REDIS_DB = 4
 SESSION_REDIS_DB = 5
 
 # =================
 # = Elasticsearch =
 # =================
 
-ELASTICSEARCH_HOSTS = ['db01:9200']
+ELASTICSEARCH_HOSTS = ['db_search:9200']
 
 # ===============
 # = Social APIs =
@@ -449,7 +465,7 @@ TWITTER_CONSUMER_SECRET = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 # = AWS Backing =
 # ===============
 
-ORIGINAL_PAGE_SERVER = "db01:3060"
+ORIGINAL_PAGE_SERVER = "db_pages:3060"
 
 BACKED_BY_AWS = {
     'pages_on_s3': False,
@@ -476,9 +492,10 @@ if not DEVELOPMENT:
     INSTALLED_APPS += (
         'gunicorn',
         'raven.contrib.django',
-         'django_ses',
+        'django_ses',
 
     )
+    RAVEN_CLIENT = raven.Client(SENTRY_DSN)
 
 COMPRESS = not DEBUG
 TEMPLATE_DEBUG = DEBUG
@@ -497,9 +514,6 @@ DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': custom_show_toolbar,
     'HIDE_DJANGO_SQL': False,
 }
-if not DEVELOPMENT:
-    RAVEN_CLIENT = raven.Client(SENTRY_DSN)
-    EMAIL_BACKEND         = 'django_ses.SESBackend'
 
 if DEBUG:
     TEMPLATE_LOADERS = (
@@ -520,8 +534,20 @@ else:
 # =========
 
 BROKER_BACKEND = "redis"
-BROKER_URL = "redis://%s:6379/4" % REDIS['host']
+BROKER_URL = "redis://%s:6379/%s" % (REDIS['host'], CELERY_REDIS_DB)
 CELERY_RESULT_BACKEND = BROKER_URL
+SESSION_REDIS_HOST = REDIS['host']
+
+CACHES = {
+    'default': {
+        'BACKEND': 'redis_cache.RedisCache',
+        'LOCATION': '%s:6379' % REDIS['host'],
+        'OPTIONS': {
+            'DB': 6,
+            'PARSER_CLASS': 'redis.connection.HiredisParser'
+        },
+    },
+}
 
 # =========
 # = Mongo =
@@ -529,7 +555,7 @@ CELERY_RESULT_BACKEND = BROKER_URL
 
 MONGO_DB_DEFAULTS = {
     'name': 'newsblur',
-    'host': 'db02:27017',
+    'host': 'db_mongo:27017',
     'alias': 'default',
 }
 MONGO_DB = dict(MONGO_DB_DEFAULTS, **MONGO_DB)
@@ -542,10 +568,9 @@ MONGO_DB = dict(MONGO_DB_DEFAULTS, **MONGO_DB)
 #     MONGOPRIMARYDB = MONGODB
 MONGODB = connect(MONGO_DB.pop('name'), **MONGO_DB)
 
-
 MONGO_ANALYTICS_DB_DEFAULTS = {
     'name': 'nbanalytics',
-    'host': 'db02:27017',
+    'host': 'db_mongo_analytics:27017',
     'alias': 'nbanalytics',
 }
 MONGO_ANALYTICS_DB = dict(MONGO_ANALYTICS_DB_DEFAULTS, **MONGO_ANALYTICS_DB)
@@ -556,19 +581,25 @@ MONGOANALYTICSDB = connect(MONGO_ANALYTICS_DB.pop('name'), **MONGO_ANALYTICS_DB)
 # = Redis =
 # =========
 
-REDIS_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=0)
-REDIS_ANALYTICS_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=2)
-REDIS_STATISTICS_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=3)
-REDIS_FEED_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=4)
-REDIS_SESSION_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=5)
-# REDIS_CACHE_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=6) # Duped in CACHES
-REDIS_STORY_HASH_POOL = redis.ConnectionPool(host=REDIS['host'], port=6379, db=8)
+REDIS_POOL               = redis.ConnectionPool(host=REDIS['host'], port=6379, db=0)
+REDIS_ANALYTICS_POOL     = redis.ConnectionPool(host=REDIS['host'], port=6379, db=2)
+REDIS_STATISTICS_POOL    = redis.ConnectionPool(host=REDIS['host'], port=6379, db=3)
+REDIS_FEED_POOL          = redis.ConnectionPool(host=REDIS['host'], port=6379, db=4)
+REDIS_SESSION_POOL       = redis.ConnectionPool(host=REDIS['host'], port=6379, db=5)
+# REDIS_CACHE_POOL       = redis.ConnectionPool(host=REDIS['host'], port=6379, db=6) # Duped in CACHES
+REDIS_PUBSUB_POOL        = redis.ConnectionPool(host=REDIS_PUBSUB['host'], port=6379, db=0)
+REDIS_STORY_HASH_POOL    = redis.ConnectionPool(host=REDIS_STORY['host'], port=6379, db=1)
+# REDIS_STORY_HASH_POOL2 = redis.ConnectionPool(host=REDIS['host'], port=6379, db=8)
+
+# ==========
+# = Assets =
+# ==========
 
 JAMMIT = jammit.JammitAssets(NEWSBLUR_DIR)
 
 if DEBUG:
-    MIDDLEWARE_CLASSES += ('utils.mongo_raw_log_middleware.SqldumpMiddleware',)
-    MIDDLEWARE_CLASSES += ('utils.redis_raw_log_middleware.SqldumpMiddleware',)
+    MIDDLEWARE_CLASSES += ('utils.mongo_raw_log_middleware.MongoDumpMiddleware',)
+    MIDDLEWARE_CLASSES += ('utils.redis_raw_log_middleware.RedisDumpMiddleware',)
     MIDDLEWARE_CLASSES += ('utils.request_introspection_middleware.DumpRequestMiddleware',)
     MIDDLEWARE_CLASSES += ('utils.exception_middleware.ConsoleExceptionMiddleware',)
 

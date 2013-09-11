@@ -10,32 +10,12 @@ from lxml.html.clean import Cleaner
 from itertools import chain
 from django.utils.dateformat import DateFormat
 from django.utils.html import strip_tags as strip_tags_django
-from django.conf import settings
 from utils.tornado_escape import linkify as linkify_tornado
 from utils.tornado_escape import xhtml_unescape as xhtml_unescape_tornado
 from vendor import reseekfile
 
 # COMMENTS_RE = re.compile('\<![ \r\n\t]*(--([^\-]|[\r\n]|-[^\-])*--[ \r\n\t]*)\>')
 COMMENTS_RE = re.compile('\<!--.*?--\>')
-
-def story_score(story, bottom_delta=None):
-    # A) Date - Assumes story is unread and within unread range
-    if not bottom_delta: 
-        bottom_delta = datetime.timedelta(days=settings.DAYS_OF_UNREAD)
-    now        = datetime.datetime.utcnow()
-    date_delta = now - story['story_date']
-    seconds    = lambda td: td.seconds + (td.days * 86400)
-    date_score = max(0, 1 - (seconds(date_delta) / float(seconds(bottom_delta))))
-    
-    # B) Statistics
-    statistics_score = 0
-    
-    # C) Intelligence
-    intelligence_score = 1
-    # intelligence_score = feed_counts[int(story['story_feed_id'])] / float(max_feed_count)
-    
-    # print "%s - %s" % (story['story_date'], date_score)
-    return (30/100. * date_score) + (55/100. * statistics_score) + (15/100. * intelligence_score)
 
 def format_story_link_date__short(date, now=None):
     if not now: now = datetime.datetime.now()
@@ -76,7 +56,7 @@ def pre_process_story(entry):
     if not publish_date and entry.get('published'):
         try:
             publish_date = dateutil.parser.parse(entry.get('published')).replace(tzinfo=None)
-        except ValueError:
+        except (ValueError, TypeError):
             pass
     
     if publish_date:
@@ -98,10 +78,15 @@ def pre_process_story(entry):
         entry['guid'] = unicode(entry['guid'])
 
     # Normalize story content/summary
+    summary = entry.get('summary') or ""
+    content = ""
+    if not summary and 'summary_detail' in entry:
+        summary = entry['summary_detail'].get('value', '')
     if entry.get('content'):
-        entry['story_content'] = entry['content'][0].get('value', '').strip()
+        content = entry['content'][0].get('value', '')
+    if len(content) > len(summary):
+        entry['story_content'] = content.strip()
     else:
-        summary = entry.get('summary') or ''
         entry['story_content'] = summary.strip()
     
     # Add each media enclosure as a Download link
@@ -237,7 +222,7 @@ def strip_comments__lxml(html_string=""):
         clean_html = cleaner.clean_html(html)
 
         return lxml.etree.tostring(clean_html)
-    except XMLSyntaxError:
+    except (XMLSyntaxError, ParserError):
         return html_string
         
 def linkify(*args, **kwargs):

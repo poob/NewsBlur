@@ -6,6 +6,7 @@ import feedparser
 import time
 import urllib2
 import httplib
+from socket import error as SocketError
 from boto.s3.key import Key
 from django.conf import settings
 from django.utils.text import compress_string
@@ -41,13 +42,13 @@ class PageImporter(object):
     @property
     def headers(self):
         return {
-            'User-Agent': 'NewsBlur Page Fetcher (%s subscriber%s) - %s '
+            'User-Agent': 'NewsBlur Page Fetcher - %s subscriber%s - %s '
                           '(Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_1) '
                           'AppleWebKit/534.48.3 (KHTML, like Gecko) Version/5.1 '
                           'Safari/534.48.3)' % (
                 self.feed.num_subscribers,
                 's' if self.feed.num_subscribers != 1 else '',
-                settings.NEWSBLUR_URL
+                self.feed.permalink,
             ),
             'Connection': 'close',
         }
@@ -80,7 +81,7 @@ class PageImporter(object):
                         response = requests.get(feed_link, headers=self.headers)
                     except requests.exceptions.TooManyRedirects:
                         response = requests.get(feed_link)
-                    except AttributeError, e:
+                    except (AttributeError, SocketError), e:
                         logging.debug('   ***> [%-30s] Page fetch failed using requests: %s' % (self.feed, e))
                         self.save_no_page()
                         return
@@ -88,6 +89,12 @@ class PageImporter(object):
                         data = response.text
                     except (LookupError, TypeError):
                         data = response.content
+
+                    if response.encoding and response.encoding != 'utf-8':
+                        try:
+                            data = data.encode(response.encoding)
+                        except LookupError:
+                            pass
             else:
                 try:
                     data = open(feed_link, 'r').read()
@@ -182,7 +189,7 @@ class PageImporter(object):
         
         if not html or len(html) < 100:
             return
-            
+        
         if settings.BACKED_BY_AWS.get('pages_on_node'):
             saved = self.save_page_node(html)
             if saved and self.feed.s3_page and settings.BACKED_BY_AWS.get('pages_on_s3'):

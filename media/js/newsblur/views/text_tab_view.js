@@ -1,9 +1,9 @@
 NEWSBLUR.Views.TextTabView = Backbone.View.extend({
     
     events: {
-        "click .NB-premium-only a" : function(e) {
+        "click .NB-text-view-premium-only a" : function(e) {
             e.preventDefault();
-            NEWSBLUR.reader.open_feedchooser_modal();
+            NEWSBLUR.reader.open_feedchooser_modal({'premium_only': true});
         }
     },
     
@@ -31,7 +31,7 @@ NEWSBLUR.Views.TextTabView = Backbone.View.extend({
         }
         if (!story) return;
 
-        if (is_temporary) {
+        if (is_temporary && _.contains(['split', 'full'], NEWSBLUR.assets.preference('story_layout'))) {
             NEWSBLUR.reader.switch_taskbar_view('text', {
                 skip_save_type: is_temporary ? 'text' : false
             });
@@ -46,7 +46,8 @@ NEWSBLUR.Views.TextTabView = Backbone.View.extend({
             show_feed_title: true,
             skip_content: true,
             text_view: true,
-            tagName: 'div'
+            tagName: 'div',
+            inline_story_title: this.options.inline_story_title
         }).render().el);
         this.$el.scrollTop(0);
         this.show_loading();
@@ -114,7 +115,7 @@ NEWSBLUR.Views.TextTabView = Backbone.View.extend({
             $.make('div', { className: 'NB-feed-story-premium-only-divider'}),
             $.make('div', { className: 'NB-feed-story-premium-only-text'}, [
                 'The full ',
-                $.make('img', { src: NEWSBLUR.Globals['MEDIA_URL'] + 'img/icons/silk/application_view_columns.png' }),
+                $.make('img', { src: NEWSBLUR.Globals['MEDIA_URL'] + 'img/icons/circular/nav_story_text_active.png' }),
                 ' Text view is a ',
                 $.make('a', { href: '#', className: 'NB-splash-link' }, 'premium feature'),
                 '.'
@@ -131,13 +132,24 @@ NEWSBLUR.Views.TextTabView = Backbone.View.extend({
         $notice.animate({'opacity': 1}, {'duration': 250, 'queue': false});
     },
     
+    show_explainer_single_story_mode: function() {
+        var $empty = $.make("div", { className: "NB-story-list-empty" }, [
+            $.make('div', { className: 'NB-world' }),
+            'Select a story to read'
+        ]);
+        
+        this.$(".NB-story-list-empty").remove();
+        this.$el.append($empty);
+    },
+    
     // ==========
     // = Events =
     // ==========
     
     select_story: function(story, selected) {
-        if (selected && NEWSBLUR.reader.story_view == 'text' &&
-            NEWSBLUR.assets.preference('story_layout') == 'split') {
+        if (!selected) return;
+        if ((NEWSBLUR.reader.story_view == 'text' &&
+             _.contains(['split', 'full'], NEWSBLUR.assets.preference('story_layout')))) {
             if (NEWSBLUR.reader.flags['temporary_story_view']) {
                 NEWSBLUR.reader.switch_to_correct_view();
             }

@@ -1,39 +1,54 @@
 from django.core.exceptions import MiddlewareNotUsed
 from django.conf import settings
 from django.db import connection
-from pymongo.connection import Connection
+from pymongo.mongo_client import MongoClient
+from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 from time import time
 import struct
 import bson
 from bson.errors import InvalidBSON
 
-class SqldumpMiddleware(object):
+class MongoDumpMiddleware(object):
     def __init__(self):
         if not settings.DEBUG:
             raise MiddlewareNotUsed()
 
     def process_view(self, request, callback, callback_args, callback_kwargs):
         self._used_msg_ids = []
-        if settings.DEBUG:
+        if settings.DEBUG and not getattr(MongoClient, '_logging', False):
             # save old methods
-            self.orig_send_message = \
-                    Connection._send_message
-            self.orig_send_message_with_response = \
-                    Connection._send_message_with_response
+            setattr(MongoClient, '_logging', True)
+            # # save old methods
+            # self.orig_send_message = \
+            #         MongoClient._send_message
+            # self.orig_send_message_with_response = \
+            #         MongoClient._send_message_with_response
+            # self.orig_rs_send_message = \
+            #         MongoReplicaSetClient._send_message
+            # self.orig_rs_send_message_with_response = \
+            #         MongoReplicaSetClient._send_message_with_response
             # instrument methods to record messages
-            Connection._send_message = \
-                    self._instrument(Connection._send_message)
-            Connection._send_message_with_response = \
-                    self._instrument(Connection._send_message_with_response)
+            MongoClient._send_message = \
+                    self._instrument(MongoClient._send_message)
+            MongoClient._send_message_with_response = \
+                    self._instrument(MongoClient._send_message_with_response)
+            MongoReplicaSetClient._send_message = \
+                    self._instrument(MongoReplicaSetClient._send_message)
+            MongoReplicaSetClient._send_message_with_response = \
+                    self._instrument(MongoReplicaSetClient._send_message_with_response)
         return None
 
     def process_response(self, request, response):
-        if settings.DEBUG and hasattr(self, 'orig_send_message') and hasattr(self, 'orig_send_message_with_response'):
-            # remove instrumentation from pymongo
-            Connection._send_message = \
-                    self.orig_send_message
-            Connection._send_message_with_response = \
-                    self.orig_send_message_with_response
+        # if settings.DEBUG and hasattr(self, 'orig_send_message') and hasattr(self, 'orig_send_message_with_response'):
+        #     # remove instrumentation from pymongo
+        #     MongoClient._send_message = \
+        #             self.orig_send_message
+        #     MongoClient._send_message_with_response = \
+        #             self.orig_send_message_with_response
+        #     MongoReplicaSetClient._send_message = \
+        #             self.orig_rs_send_message
+        #     MongoReplicaSetClient._send_message_with_response = \
+        #             self.orig_rs_send_message_with_response
         return response
 
     def _instrument(self, original_method):
@@ -56,7 +71,8 @@ class SqldumpMiddleware(object):
 def _mongodb_decode_wire_protocol(message):
     """ http://www.mongodb.org/display/DOCS/Mongo+Wire+Protocol """
     MONGO_OPS = {
-        2001: 'msg',
+        1000: 'msg',
+        2001: 'update',
         2002: 'insert',
         2003: 'reserved',
         2004: 'query',

@@ -11,6 +11,7 @@ from django.template import RequestContext
 from apps.rss_feeds.models import Feed, merge_feeds
 from apps.rss_feeds.models import MFetchHistory
 from apps.rss_feeds.models import MFeedIcon
+from apps.push.models import PushSubscription
 from apps.analyzer.models import get_classifiers_for_user
 from apps.reader.models import UserSubscription
 from apps.rss_feeds.models import MStory
@@ -20,7 +21,7 @@ from utils.feed_functions import relative_timeuntil, relative_timesince
 from utils.user_functions import get_user
 from utils.view_functions import get_argument_or_404
 from utils.view_functions import required_params
-
+from vendor.timezones.utilities import localtime_for_timezone
 
 @json.json_view
 def search_feed(request):
@@ -92,7 +93,8 @@ def feed_autocomplete(request):
             logging.user(request, "~FGAdd search, could not parse url in ~FR%s" % query)
         
     feed_ids = Feed.autocomplete(query)
-    feeds = [Feed.get_by_id(feed_id) for feed_id in feed_ids]
+    feeds = list(set([Feed.get_by_id(feed_id) for feed_id in feed_ids]))
+    feeds = [feed for feed in feeds if feed and not feed.branch_from_feed]
     if format == 'autocomplete':
         feeds = [{
             'id': feed.pk,
@@ -100,7 +102,7 @@ def feed_autocomplete(request):
             'label': feed.feed_title,
             'tagline': feed.data and feed.data.feed_tagline,
             'num_subscribers': feed.num_subscribers,
-        } for feed in feeds if feed]
+        } for feed in feeds]
     else:
         feeds = [feed.canonical(full=True) for feed in feeds]
     feeds = sorted(feeds, key=lambda f: -1 * f['num_subscribers'])
@@ -128,6 +130,7 @@ def feed_autocomplete(request):
 @json.json_view
 def load_feed_statistics(request, feed_id):
     user = get_user(request)
+    timezone = user.profile.timezone
     stats = dict()
     feed = get_object_or_404(Feed, pk=feed_id)
     feed.update_all_statistics()
@@ -140,6 +143,14 @@ def load_feed_statistics(request, feed_id):
     stats['last_update'] = relative_timesince(feed.last_update)
     stats['next_update'] = relative_timeuntil(feed.next_scheduled_update)
     stats['push'] = feed.is_push
+    if feed.is_push:
+        try:
+            stats['push_expires'] = localtime_for_timezone(feed.push.lease_expires, 
+                                                           timezone).strftime("%Y-%m-%d %H:%M:%S")
+        except PushSubscription.DoesNotExist:
+            stats['push_expires'] = 'Missing push'
+            feed.is_push = False
+            feed.save()
 
     # Minutes between updates
     update_interval_minutes = feed.get_next_scheduled_update(force=True, verbose=False)
@@ -148,7 +159,8 @@ def load_feed_statistics(request, feed_id):
     original_premium_subscribers = feed.premium_subscribers
     feed.active_premium_subscribers = max(feed.active_premium_subscribers+1, 1)
     feed.premium_subscribers += 1
-    premium_update_interval_minutes = feed.get_next_scheduled_update(force=True, verbose=False)
+    premium_update_interval_minutes = feed.get_next_scheduled_update(force=True, verbose=False,
+                                                                     premium_speed=True)
     feed.active_premium_subscribers = original_active_premium_subscribers
     feed.premium_subscribers = original_premium_subscribers
     stats['premium_update_interval_minutes'] = premium_update_interval_minutes
@@ -167,17 +179,17 @@ def load_feed_statistics(request, feed_id):
     
     # Subscribers
     stats['subscriber_count'] = feed.num_subscribers
+    stats['num_subscribers'] = feed.num_subscribers
     stats['stories_last_month'] = feed.stories_last_month
     stats['last_load_time'] = feed.last_load_time
     stats['premium_subscribers'] = feed.premium_subscribers
     stats['active_subscribers'] = feed.active_subscribers
     stats['active_premium_subscribers'] = feed.active_premium_subscribers
-    
+
     # Classifier counts
     stats['classifier_counts'] = json.decode(feed.data.feed_classifier_counts)
     
     # Fetch histories
-    timezone = user.profile.timezone
     fetch_history = MFetchHistory.feed(feed_id, timezone=timezone)
     stats['feed_fetch_history'] = fetch_history['feed_fetch_history']
     stats['page_fetch_history'] = fetch_history['page_fetch_history']
@@ -253,7 +265,7 @@ def exception_change_feed_address(request):
     timezone = request.user.profile.timezone
     code = -1
 
-    if feed.has_page_exception or feed.has_feed_exception:
+    if not feed.known_good and (feed.has_page_exception or feed.has_feed_exception):
         # Fix broken feed
         logging.user(request, "~FRFixing feed exception by address: ~SB%s~SN to ~SB%s" % (feed.feed_address, feed_address))
         feed.has_feed_exception = False
@@ -333,7 +345,7 @@ def exception_change_feed_link(request):
     timezone = request.user.profile.timezone
     code = -1
     
-    if feed.has_page_exception or feed.has_feed_exception:
+    if not feed.known_good and (feed.has_page_exception or feed.has_feed_exception):
         # Fix broken feed
         logging.user(request, "~FRFixing feed exception by link: ~SB%s~SN to ~SB%s" % (feed.feed_link, feed_link))
         feed_address = feedfinder.feed(feed_link)
@@ -422,15 +434,15 @@ def status(request):
 @required_params('story_id', feed_id=int)
 @json.json_view
 def original_text(request):
-    story_id = request.GET['story_id']
-    feed_id = request.GET['feed_id']
-    force = request.GET.get('force', False)
+    story_id = request.REQUEST.get('story_id')
+    feed_id = request.REQUEST.get('feed_id')
+    force = request.REQUEST.get('force', False)
     
     story, _ = MStory.find_story(story_id=story_id, story_feed_id=feed_id)
 
     if not story:
         logging.user(request, "~FYFetching ~FGoriginal~FY story text: ~FRstory not found")
-        return {'code': -1, 'message': 'Story not found.'}
+        return {'code': -1, 'message': 'Story not found.', 'original_text': None, 'failed': True}
     
     original_text = story.fetch_original_text(force=force, request=request)
 
@@ -438,4 +450,5 @@ def original_text(request):
         'feed_id': feed_id,
         'story_id': story_id,
         'original_text': original_text,
+        'failed': not original_text or len(original_text) < 100,
     }

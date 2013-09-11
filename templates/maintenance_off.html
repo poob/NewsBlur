@@ -82,10 +82,11 @@
                 <td align="center" valign="middle">
                     <div id="container">
                         <img src="/media/img/logo_512.png" class="logo">
-                        <h1>NewsBlur has been <span class="error404">upgraded</span></h1>
+                        <h1>NewsBlur is in <span class="error404">maintenance mode</span></h1>
                         <div class="description">
-                            <p>A huge thank you to all of you beta testers. You've made this deployment and redesign as close to painless as it gets.</p>
-                            <p>Now go back to <a href="//www.newsblur.com">www.newsblur.com</a>, I've got new things to test on this server.</p>
+                            <p>This will take about 2 minutes. About a week ago my primary Redis server became big enough to consume the entire machine, which is a one way ticket to getting killed automatically by the machine. The last four outages, three lasting less than 2 minutes and this morning's bigger outage, were all caused by this server toppling over.</p>
+                            <p>I am performing the simple fix right now by moving it to a bigger machine. I am also performing the more complicated fix by concurrently writing data with a smaller footprint to another server. But this more complicated solution takes 14 days to run and won't complete until July 15th. I was hoping that I could avoid the simple fix and just wait until the 15th, but four outages is more than enough to convince me.</p>
+                            <p>To pass the time, <a href="http://mlkshk.com/popular">check out what's popular on MLKSHK</a>.</p>
                         </div>
                     </div>
                 </td>

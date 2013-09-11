@@ -52,8 +52,7 @@ _.extend(NEWSBLUR.ReaderSendEmail.prototype, {
             ]),
             $.make('div', { className: 'NB-modal-email-to-container' }, [
               $.make('label', { 'for': 'NB-send-email-to' }, [
-                $.make('span', { className: 'NB-raquo' }, '&raquo;'),
-                ' Recipient\'s emails: '
+                ' Recipient emails: '
               ]),
               $.make('input', { className: 'NB-input NB-modal-to', name: 'to', id: 'NB-send-email-to', value: 
           ($.cookie('NB:email:to') || "") })
@@ -67,21 +66,18 @@ _.extend(NEWSBLUR.ReaderSendEmail.prototype, {
             $.make('div', { className: 'NB-modal-email-from-container' }, [
               $.make('div', [
                 $.make('label', { 'for': 'NB-send-email-from-name' }, [
-                  $.make('span', { className: 'NB-raquo' }, '&raquo;'),
                   ' Your name: '
                 ]),
                 $.make('input', { className: 'NB-input NB-modal-email-from', name: 'from_name', id: 'NB-send-email-from-name', value: this.model.preference('full_name') || NEWSBLUR.Globals.username || '' })
               ]),
               $.make('div', { style: 'margin-top: 8px' }, [
                 $.make('label', { 'for': 'NB-send-email-from-email' }, [
-                  $.make('span', { className: 'NB-raquo' }, '&raquo;'),
                   ' Your email: '
                 ]),
                 $.make('input', { className: 'NB-input NB-modal-email-from', name: 'from_email', id: 'NB-send-email-from-email', value: NEWSBLUR.Globals.email || this.model.preference('email') || '' })
               ]),
               $.make('div', { style: 'margin-top: 8px' }, [
                 $.make('label', { 'for': 'NB-send-email-cc' }, [
-                  $.make('span', { className: 'NB-raquo' }, '&raquo;'),
                   ' CC me: '
                 ]),
                 $.make('div', { className: 'NB-modal-email-cc-wrapper' }, [
@@ -145,7 +141,7 @@ _.extend(NEWSBLUR.ReaderSendEmail.prototype, {
           emails = _.uniq(this.existing_emails.concat(emails));
           emails = _.map(emails, function(e) { return _.string.trim(e); });
           emails = _.compact(emails);
-          $.cookie('NB:email:addresses', $.toJSON(emails));
+          $.cookie('NB:email:addresses', $.toJSON(emails), {expires: 365*10});
           this.close();
         }
     },
@@ -205,15 +201,17 @@ _.extend(NEWSBLUR.ReaderSendEmail.prototype, {
             // don't navigate away from the field on tab when selecting an item
             .bind( "keydown", function( event ) {
                 if ( event.keyCode === $.ui.keyCode.TAB &&
-                        $( this ).data( "autocomplete" ).menu.active ) {
+                        $( this ).data( "ui-autocomplete" ).menu.active ) {
                     event.preventDefault();
                 }
             })
             .autocomplete({
                 delay: 0,
                 minLength: 0,
+                appendTo: '.NB-modal-email',
                 source: function( request, response ) {
                     // delegate back to autocomplete, but extract the last term
+                    console.log(["autocomplete", request, request.term, existing_emails]);
                     response( $.ui.autocomplete.filter(
                         existing_emails, extractLast( request.term ) ) );
                 },

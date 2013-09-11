@@ -3,7 +3,7 @@ NEWSBLUR.ReaderAddFeed = NEWSBLUR.ReaderPopover.extend({
     className: "NB-add-popover",
     
     options: {
-        'width': 300,
+        'width': 380,
         'anchor': function() {
             return NEWSBLUR.reader.$s.$add_button;
         },
@@ -62,7 +62,7 @@ NEWSBLUR.ReaderAddFeed = NEWSBLUR.ReaderPopover.extend({
                         $.make('input', { type: 'text', id: 'NB-add-url', className: 'NB-input NB-add-url', name: 'url', value: self.options.url })
                     ]),
                     $.make('div', { className: 'NB-group NB-add-site' }, [
-                        NEWSBLUR.utils.make_folders(this.model, this.options.folder_title),
+                        NEWSBLUR.utils.make_folders(this.options.folder_title),
                         $.make('div', { className: 'NB-add-folder-icon' }),
                         $.make('div', { className: 'NB-modal-submit-button NB-modal-submit-green NB-add-url-submit' }, 'Add site'),
                         $.make('div', { className: 'NB-loading' })
@@ -121,15 +121,12 @@ NEWSBLUR.ReaderAddFeed = NEWSBLUR.ReaderPopover.extend({
         
         $add.autocomplete({
             minLength: 1,
+            appendTo: ".NB-add-form",
             source: '/rss_feeds/feed_autocomplete',
             position: {
                 my: "left bottom",
                 at: "left top",
                 collision: "none"
-            },
-            focus: function(e, ui) {
-                $add.val(ui.item.value);
-                return false;
             },
             select: function(e, ui) {
                 $add.val(ui.item.value);
@@ -149,18 +146,18 @@ NEWSBLUR.ReaderAddFeed = NEWSBLUR.ReaderPopover.extend({
             },
             change: function(e, ui) {
             }
-        }).data("autocomplete")._renderItem = function(ul, item) {
+        }).data("ui-autocomplete")._renderItem = function(ul, item) {
             var feed = new NEWSBLUR.Models.Feed(item);
             return $.make('li', [
                 $.make('a', [
-                    $.make('div', { className: 'NB-add-autocomplete-subscribers'}, item.num_subscribers + Inflector.pluralize(' subscriber', item.num_subscribers)),
+                    $.make('div', { className: 'NB-add-autocomplete-subscribers'}, Inflector.pluralize(' subscriber', item.num_subscribers, true)),
                     $.make('img', { className: 'NB-add-autocomplete-favicon', src: $.favicon(feed) }),
                     $.make('div', { className: 'NB-add-autocomplete-title'}, item.label),
                     $.make('div', { className: 'NB-add-autocomplete-address'}, item.value)
                 ])
-            ]).data("item.autocomplete", item).prependTo(ul);
+            ]).data("ui-autocomplete-item", item).prependTo(ul);
         };
-        $add.data("autocomplete")._resizeMenu = function () {
+        $add.data("ui-autocomplete")._resizeMenu = function () {
             var ul = this.menu.element;
             ul.outerWidth(this.element.outerWidth());
         };
@@ -296,7 +293,7 @@ NEWSBLUR.ReaderAddFeed = NEWSBLUR.ReaderPopover.extend({
         if (data.code > 0) {
             $submit.text('Added!');
             NEWSBLUR.assets.load_feeds(_.bind(function() {
-                var $folders = NEWSBLUR.utils.make_folders(this.model, $folder.val());
+                var $folders = NEWSBLUR.utils.make_folders($folder.val());
                 this.$(".NB-folders").replaceWith($folders);
                 this.open_add_folder();
                 $submit.text('Add Folder');

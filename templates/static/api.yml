@@ -38,7 +38,7 @@
           example: "new$blur"
         - key: email
           desc: "Email address"
-          optional: true
+          required: true
           example: "samuel@newsblur.com"
         
 - feeds:
@@ -195,6 +195,10 @@
           optional: true
           default: "true"
           example: "false"
+      tips:
+        - >
+          The story score (red, neutral, green) can be computed by following 
+          the function <a href="https://github.com/samuelclay/NewsBlur/blob/master/media/js/newsblur/reader/reader_utils.js"> `compute_story_score` in reader_utils.js on GitHub</a>.
   
     - url: /reader/starred_stories
       method: GET
@@ -207,6 +211,23 @@
           optional: true
           default: 1
           example: 2
+        - key: h
+          desc: "Pass up to 100 story_hashes. Use with starred_story_hashes."
+          optional: true
+          example: "h=a1b2c3&h=d4e5f6"
+
+    - url: /reader/starred_story_hashes
+      method: GET
+      short_desc: "Story hashes of starred stories."
+      long_desc: 
+        - "Retrieve the story hashes of a user's starred stories."
+      params:
+        - key: include_timestamps
+          desc: "Including timestamps for starred_date"
+          optional: true
+          default: false
+      tips:
+        - "Use with /reader/starred_stories and pass up to 100 story_hashes as the `h` param."
   
     - url: /reader/river_stories
       method: GET
@@ -234,6 +255,10 @@
           optional: true
           default: unread
           example: all
+        - key: h
+          desc: "Pass up to 100 story_hashes. Use with unread_story_hashes."
+          optional: true
+          example: "h=a1b2c3&h=d4e5f6"
 
     - url: /reader/unread_story_hashes
       method: GET
@@ -241,17 +266,42 @@
       long_desc: 
         - "The story_hashes of all unread stories."
         - "Useful for offline access of stories and quick unread syncing."
+        - "Use include_timestamps to fetch stories in date order."
       params:
         - key: feed_id
           desc: "Feed ids to check. Omit to include every feed subscription."
           optional: true
           example: "feed_id=12&feed_id=24"
-          
-    - url: /reader/mark_story_as_read
+        - key: include_timestamps
+          desc: "Including timestamps for story_date"
+          optional: true
+          default: false
+    
+    - url: /reader/mark_story_hashes_as_read
       method: POST
       short_desc: "Mark a story as read."
       long_desc: 
-        - "Mark stories as read."
+        - "Mark stories as read using their unique story_hash."
+        - "Multiple story hashes can be sent at once."
+        - "Mix and match stories from different feeds and social subscriptions."
+      tips:
+        - "Throttle requests to mark as read. You don't need to send one request per story."
+        - "Queue up to 5 stories or once every 10 seconds before firing, whichever comes first."
+        - >
+            This endpoint is newer than all of the other mark as read endpoints, so use this one.
+            The other endpoints are maintained for old clients to use.
+      params:
+        - key: story_hash
+          desc: "List of story hashes to mark as read."
+          required: true
+          example: >
+            story_hash=123:a1d62b&story_hash=1456789:4e3c12
+          
+    - url: /reader/mark_story_as_read
+      method: POST
+      short_desc: "Mark a story as read (deprecated)."
+      long_desc: 
+        - "Mark stories as read (deprecated)."
         - "Multiple story ids can be sent at once."
         - "Each story must be from the same feed."
       tips:
@@ -270,7 +320,7 @@
   
     - url: /reader/mark_feed_stories_as_read
       method: POST
-      short_desc: "Mark stories from multiple feeds as read."
+      short_desc: "Mark stories from multiple feeds as read (deprecated)."
       long_desc: 
         - "Marks multiple stories as read."
         - "Multiple story ids can be sent at once."
@@ -286,7 +336,7 @@
     
     - url: /reader/mark_social_stories_as_read
       method: POST
-      short_desc: "Mark stories from a blurblog as read."
+      short_desc: "Mark stories from a blurblog as read (deprecated)."
       long_desc: 
         - "Marks multiple stories as read."
         - "Multiple story ids can be sent at once."
@@ -323,6 +373,21 @@
       params:
         - key: story_id
           desc: "Story id to save."
+          required: true
+          example: "64"
+        - key: feed_id
+          desc: "Feed id that the story is from."
+          required: true
+          example: "42"
+  
+    - url: /reader/mark_story_as_unstarred
+      method: POST
+      short_desc: "Mark a story as unstarred (unsaved)."
+      long_desc: 
+        - "Mark a story as unstarred (unsaved)."
+      params:
+        - key: story_id
+          desc: "Story id to unsave."
           required: true
           example: "64"
         - key: feed_id

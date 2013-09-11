@@ -53,10 +53,21 @@ NEWSBLUR.Models.Story = Backbone.Model.extend({
         NEWSBLUR.reader.update_starred_count();
     },
     
-    open_story_in_new_tab: function() {
+    open_story_in_new_tab: function(background) {
         this.mark_read({skip_delay: true});
-        window.open(this.get('story_permalink'), '_blank');
-        window.focus();
+
+        if (background && !$.browser.mozilla) {
+            var anchor, event;
+
+            anchor = document.createElement("a");
+            anchor.href = this.get('story_permalink');
+            event = document.createEvent("MouseEvents");
+            event.initMouseEvent("click", true, true, window, 0, 0, 0, 0, 0, true, false, false, true, 0, null);
+            return anchor.dispatchEvent(event);
+        } else {
+            window.open(this.get('story_permalink'), '_blank');
+            window.focus();
+        }
     },
     
     open_share_dialog: function(e, view) {
@@ -115,6 +126,8 @@ NEWSBLUR.Collections.Stories = Backbone.Collection.extend({
 
         if (options.skip_delay) {
             delay = 0;
+        } else if (options.force) {
+            delay = 0;
         } else if (delay == -1) {
             return;
         }
@@ -123,19 +136,13 @@ NEWSBLUR.Collections.Stories = Backbone.Collection.extend({
         
         this.read_story_delay = _.delay(_.bind(function() {
             if (!delay || (delay && this.active_story.id == story.id)) {
-                var mark_read_fn = NEWSBLUR.assets.mark_story_as_read;
                 var feed = NEWSBLUR.assets.get_feed(NEWSBLUR.reader.active_feed);
                 if (!feed) {
                     feed = NEWSBLUR.assets.get_feed(story.get('story_feed_id'));
                 }
-                if ((feed && feed.is_social()) ||
-                    _.contains(['river:blurblogs', 'river:global'], NEWSBLUR.reader.active_feed)) {
-                    mark_read_fn = NEWSBLUR.assets.mark_social_story_as_read;
-                }
-                mark_read_fn.call(NEWSBLUR.assets, story, feed, _.bind(function(read) {
+                NEWSBLUR.assets.mark_story_hash_as_read(story, _.bind(function(read) {
                     this.update_read_count(story, {previously_read: read});
                 }, this));
-                story.set('read_status', 1);
             }
         }, this), delay * 1000);
     },

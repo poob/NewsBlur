@@ -13,7 +13,7 @@ from django.shortcuts import render_to_response
 from django.core.mail import mail_admins
 from django.conf import settings
 from apps.profile.models import Profile, PaymentHistory, RNewUserQueue
-from apps.reader.models import UserSubscription
+from apps.reader.models import UserSubscription, UserSubscriptionFolders
 from apps.profile.forms import StripePlusPaymentForm, PLANS, DeleteAccountForm
 from apps.profile.forms import ForgotPasswordForm, ForgotPasswordReturnForm, AccountSettingsForm
 from apps.social.models import MSocialServices, MActivity, MSocialProfile
@@ -59,6 +59,7 @@ def set_preference(request):
     request.user.profile.preferences = json.encode(preferences)
     request.user.profile.save()
     
+    logging.user(request, "~FMSaving preference: %s" % new_preferences)
     response = dict(code=code, message=message, new_preferences=new_preferences)
     return response
 
@@ -118,6 +119,8 @@ def set_view_setting(request):
     request.user.profile.view_settings = json.encode(view_settings)
     request.user.profile.save()
     
+    logging.user(request, "~FMView settings: %s/%s/%s" % (feed_view_setting, 
+                 feed_order_setting, feed_read_filter_setting))
     response = dict(code=code)
     return response
 
@@ -142,6 +145,7 @@ def set_collapsed_folders(request):
     request.user.profile.collapsed_folders = collapsed_folders
     request.user.profile.save()
     
+    logging.user(request, "~FMCollapsing folder: %s" % collapsed_folders)
     response = dict(code=code)
     return response
 
@@ -217,6 +221,7 @@ def stripe_form(request):
     stripe.api_key = settings.STRIPE_SECRET
     plan = int(request.GET.get('plan', 2))
     plan = PLANS[plan-1][0]
+    error = None
     
     if request.method == 'POST':
         zebra_form = StripePlusPaymentForm(request.POST, email=user.email)
@@ -224,19 +229,22 @@ def stripe_form(request):
             user.email = zebra_form.cleaned_data['email']
             user.save()
             
-            customer = stripe.Customer.create(**{
-                'card': zebra_form.cleaned_data['stripe_token'],
-                'plan': zebra_form.cleaned_data['plan'],
-                'email': user.email,
-                'description': user.username,
-            })
-            
-            user.profile.strip_4_digits = zebra_form.cleaned_data['last_4_digits']
-            user.profile.stripe_id = customer.id
-            user.profile.save()
-            user.profile.activate_premium() # TODO: Remove, because webhooks are slow
+            try:
+                customer = stripe.Customer.create(**{
+                    'card': zebra_form.cleaned_data['stripe_token'],
+                    'plan': zebra_form.cleaned_data['plan'],
+                    'email': user.email,
+                    'description': user.username,
+                })
+            except stripe.CardError:
+                error = "This card was declined."
+            else:
+                user.profile.strip_4_digits = zebra_form.cleaned_data['last_4_digits']
+                user.profile.stripe_id = customer.id
+                user.profile.save()
+                user.profile.activate_premium() # TODO: Remove, because webhooks are slow
 
-            success_updating = True
+                success_updating = True
 
     else:
         zebra_form = StripePlusPaymentForm(email=user.email, plan=plan)
@@ -262,6 +270,7 @@ def stripe_form(request):
           'new_user_queue_count': new_user_queue_count - 1,
           'new_user_queue_position': new_user_queue_position,
           'new_user_queue_behind': new_user_queue_behind,
+          'error': error,
         },
         context_instance=RequestContext(request)
     )
@@ -307,9 +316,10 @@ def cancel_premium(request):
 @json.json_view
 def refund_premium(request):
     user_id = request.REQUEST.get('user_id')
+    partial = request.REQUEST.get('partial', False)
     user = User.objects.get(pk=user_id)
     try:
-        refunded = user.profile.refund_premium()
+        refunded = user.profile.refund_premium(partial=partial)
     except stripe.InvalidRequestError, e:
         refunded = e
 
@@ -390,3 +400,20 @@ def forgot_password_return(request):
     return {
         'forgot_password_return_form': form,
     }
+
+@ajax_login_required
+@json.json_view
+def delete_all_sites(request):
+    request.user.profile.send_opml_export_email()
+    
+    subs = UserSubscription.objects.filter(user=request.user)
+    sub_count = subs.count()
+    subs.delete()
+    
+    usf = UserSubscriptionFolders.objects.get(user=request.user)
+    usf.folders = '[]'
+    usf.save()
+    
+    logging.user(request.user, "~BC~FRDeleting %s sites" % sub_count)
+
+    return dict(code=1)
