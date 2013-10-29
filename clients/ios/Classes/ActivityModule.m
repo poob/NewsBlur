@@ -24,7 +24,8 @@
 @synthesize pageFinished;
 @synthesize activitiesPage;
 
-#define MINIMUM_ACTIVITY_HEIGHT 48 + 30
+#define MINIMUM_ACTIVITY_HEIGHT_IPAD 78
+#define MINIMUM_ACTIVITY_HEIGHT_IPHONE 54
 
 - (id)initWithFrame:(CGRect)frame
 {
@@ -166,14 +167,21 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {    
-    int activitesCount = [appDelegate.userActivitiesArray count];
+    NSInteger activitesCount = [appDelegate.userActivitiesArray count];
     return activitesCount + 1;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {    
-    int activitiesCount = [appDelegate.userActivitiesArray count];
+    NSInteger activitiesCount = [appDelegate.userActivitiesArray count];
+    int minimumHeight;
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        minimumHeight = MINIMUM_ACTIVITY_HEIGHT_IPAD;
+    } else {
+        minimumHeight = MINIMUM_ACTIVITY_HEIGHT_IPHONE;
+    }
+    
     if (indexPath.row >= activitiesCount) {
-        return MINIMUM_ACTIVITY_HEIGHT;
+        return minimumHeight;
     }
     
     id activityCell;
@@ -185,14 +193,12 @@
     
     NSMutableDictionary *userProfile = [appDelegate.dictSocialProfile  mutableCopy];
     [userProfile setValue:@"You" forKey:@"username"];
-    
-    int height = [activityCell setActivity:[appDelegate.userActivitiesArray 
-                                            objectAtIndex:(indexPath.row)] 
+    NSDictionary *activity = [appDelegate.userActivitiesArray
+                              objectAtIndex:(indexPath.row)];
+    int height = [activityCell setActivity:activity
                            withUserProfile:userProfile
-                                 withWidth:self.frame.size.width - 20] + 30;
-    
+                                 withWidth:self.frame.size.width - 20];
     return height;
-
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -214,17 +220,20 @@
         // add in loading cell
         return [self makeLoadingCell];
     } else {
-
         NSMutableDictionary *userProfile = [appDelegate.dictSocialProfile  mutableCopy];
         [userProfile setValue:@"You" forKey:@"username"];
         
-        NSDictionary *activitiy = [appDelegate.userActivitiesArray 
+        NSDictionary *activity = [appDelegate.userActivitiesArray
                                    objectAtIndex:(indexPath.row)];
-        NSString *category = [activitiy objectForKey:@"category"];
+
+        [cell setActivity:activity
+          withUserProfile:userProfile
+                withWidth:self.frame.size.width - 20];
+        
+        NSString *category = [activity objectForKey:@"category"];
         if ([category isEqualToString:@"follow"]) {
             cell.accessoryType = UITableViewCellAccessoryNone;
-        } else if ([category isEqualToString:@"star"] ||
-                   [category isEqualToString:@"signup"]){
+        } else if ([category isEqualToString:@"signup"]){
             cell.accessoryType = UITableViewCellAccessoryNone;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else {
@@ -234,17 +243,13 @@
         UIView *myBackView = [[UIView alloc] initWithFrame:self.frame];
         myBackView.backgroundColor = UIColorFromRGB(NEWSBLUR_HIGHLIGHT_COLOR);
         cell.selectedBackgroundView = myBackView;
-
-        // update the cell information
-        [cell setActivity: activitiy
-          withUserProfile:userProfile
-                withWidth:self.frame.size.width - 20];
     }
+    
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    int activitiesCount = [appDelegate.userActivitiesArray count];
+    NSInteger activitiesCount = [appDelegate.userActivitiesArray count];
     if (indexPath.row < activitiesCount) {
         NSDictionary *activity = [appDelegate.userActivitiesArray objectAtIndex:indexPath.row];
         NSString *category = [activity objectForKey:@"category"];
@@ -283,6 +288,12 @@
                                       withUser:[activity objectForKey:@"with_user"]
                               showFindingStory:YES];
             appDelegate.tryFeedCategory = category;
+        } else if ([category isEqualToString:@"star"]) {
+            NSString *contentIdStr = [NSString stringWithFormat:@"%@",
+                                      [activity objectForKey:@"content_id"]];
+            [appDelegate loadStarredDetailViewWithStory:contentIdStr
+                                       showFindingStory:YES];
+            appDelegate.tryFeedCategory = category;
         } else if ([category isEqualToString:@"feedsub"]) {
             NSString *feedIdStr = [NSString stringWithFormat:@"%@",
                                    [activity objectForKey:@"feed_id"]];
@@ -310,7 +321,12 @@
     if (self.pageFinished) {
         UIImage *img = [UIImage imageNamed:@"fleuron.png"];
         UIImageView *fleuron = [[UIImageView alloc] initWithImage:img];
-        int height = MINIMUM_ACTIVITY_HEIGHT;
+        int height;
+        if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+            height = MINIMUM_ACTIVITY_HEIGHT_IPAD;
+        } else {
+            height = MINIMUM_ACTIVITY_HEIGHT_IPHONE;
+        }
         
         fleuron.frame = CGRectMake(0, 0, self.frame.size.width, height);
         fleuron.contentMode = UIViewContentModeCenter;

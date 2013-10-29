@@ -7,7 +7,6 @@
 //
 
 #import "SmallInteractionCell.h"
-#import "NSAttributedString+Attributes.h"
 #import "UIImageView+AFNetworking.h"
 #import <QuartzCore/QuartzCore.h>
 
@@ -18,15 +17,15 @@
     if (self = [super initWithStyle:style reuseIdentifier:reuseIdentifier]) {
         interactionLabel = nil;
         avatarView = nil;
+        self.separatorInset = UIEdgeInsetsMake(0, 52, 0, 0);
         
         // create favicon and label in view
         UIImageView *favicon = [[UIImageView alloc] initWithFrame:CGRectZero];
         self.avatarView = favicon;
         [self.contentView addSubview:favicon];
         
-        OHAttributedLabel *interaction = [[OHAttributedLabel alloc] initWithFrame:CGRectZero];
+        UILabel *interaction = [[UILabel alloc] initWithFrame:CGRectZero];
         interaction.backgroundColor = [UIColor whiteColor];
-        interaction.automaticallyAddLinksForType = NO;
         self.interactionLabel = interaction;
         [self.contentView addSubview:interaction];
         
@@ -44,18 +43,20 @@
     [super layoutSubviews];
     
     // determine outer bounds
-    CGRect contentRect = self.contentView.bounds;
+    [self.interactionLabel sizeToFit];
+    CGRect contentRect = self.frame;
+    CGRect labelFrame = self.interactionLabel.frame;
     
     // position avatar to bounds
     self.avatarView.frame = CGRectMake(leftMargin, topMargin, avatarSize, avatarSize);
     
     // position label to bounds
-    CGRect labelRect = contentRect;
-    labelRect.origin.x = labelRect.origin.x + leftMargin + avatarSize + leftMargin;
-    labelRect.origin.y = labelRect.origin.y + topMargin - 1;
-    labelRect.size.width = contentRect.size.width - leftMargin - avatarSize - leftMargin - rightMargin;
-    labelRect.size.height = contentRect.size.height - topMargin - bottomMargin;
-    self.interactionLabel.frame = labelRect;
+    labelFrame.origin.x = leftMargin*2 + avatarSize;
+    labelFrame.origin.y = topMargin - 1;
+    labelFrame.size.width = contentRect.size.width - leftMargin - avatarSize - leftMargin - rightMargin - 20;
+    labelFrame.size.height = contentRect.size.height - topMargin - bottomMargin;
+    self.interactionLabel.frame = labelFrame;
+
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
         self.interactionLabel.backgroundColor = UIColorFromRGB(0xd7dadf);
     } else {

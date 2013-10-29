@@ -36,15 +36,22 @@
 
 - (void)viewDidLoad {    
     UIImageView *folderImage = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"g_icn_folder.png"]];
-    folderImage.frame = CGRectMake(0, 0, 16, 16);
+    folderImage.frame = CGRectMake(0, 0, 24, 16);
+    [folderImage setContentMode:UIViewContentModeRight];
     [toFolderInput setLeftView:folderImage];
     [toFolderInput setLeftViewMode:UITextFieldViewModeAlways];
+    
     UIImageView *folderImage2 = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"g_icn_folder_rss.png"]];
-    folderImage2.frame = CGRectMake(0, 0, 16, 16);
+    folderImage2.frame = CGRectMake(0, 0, 24, 16);
+    [folderImage2 setContentMode:UIViewContentModeRight];
     [fromFolderInput setLeftView:folderImage2];
     [fromFolderInput setLeftViewMode:UITextFieldViewModeAlways];
-        
+    
     navBar.tintColor = [UIColor colorWithRed:0.16f green:0.36f blue:0.46 alpha:0.9];
+
+    CGRect frame = self.navBar.frame;
+    frame.size.height += 20;
+    self.navBar.frame = frame;
     
     appDelegate = [NewsBlurAppDelegate sharedAppDelegate];
     
@@ -71,7 +78,7 @@
         [subview removeFromSuperview];
     }
     UIView *label = [appDelegate makeFeedTitle:appDelegate.activeFeed];
-    label.frame = CGRectMake(0, 
+    label.frame = CGRectMake(8,
                              0, 
                              200, 
                              20);
@@ -89,7 +96,7 @@
 - (void)reload {
     BOOL isTopLevel = [[appDelegate.activeFolder trim] isEqualToString:@""] ||
                       [appDelegate.activeFolder isEqual:@"everything"];
-    int row = 0;
+    NSInteger row = 0;
     [toFolderInput setText:@""];
     
     if (appDelegate.isRiverView) {
@@ -287,6 +294,19 @@ numberOfRowsInComponent:(NSInteger)component {
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     return YES;
+}
+
+@end
+
+
+@implementation FolderTextField
+
+- (CGRect)textRectForBounds:(CGRect)bounds {
+    return CGRectInset(bounds, 24, 0);
+}
+
+- (CGRect)editingRectForBounds:(CGRect)bounds {
+    return CGRectInset(bounds, 24, 0);
 }
 
 @end

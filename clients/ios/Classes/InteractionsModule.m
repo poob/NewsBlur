@@ -13,8 +13,10 @@
 #import <QuartzCore/QuartzCore.h>
 #import "ASIHTTPRequest.h"
 #import "UserProfileViewController.h"
+#import "DashboardViewController.h"
 
-#define MINIMUM_INTERACTION_HEIGHT 78
+#define MINIMUM_INTERACTION_HEIGHT_IPAD 78
+#define MINIMUM_INTERACTION_HEIGHT_IPHONE 54
 
 @implementation InteractionsModule
 
@@ -147,6 +149,10 @@
     
     if (self.interactionsPage == 1) {
         appDelegate.userInteractionsArray = confirmedInteractions;
+        if (![confirmedInteractions count]) {
+            appDelegate.dashboardViewController.segmentedButton.selectedSegmentIndex = 1;
+            [appDelegate.dashboardViewController tapSegmentedButton:nil];
+        }
     } else {
         appDelegate.userInteractionsArray = [appDelegate.userInteractionsArray arrayByAddingObjectsFromArray:newInteractions];
     }
@@ -174,9 +180,16 @@
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    int userInteractions = [appDelegate.userInteractionsArray count];
+    NSInteger userInteractions = [appDelegate.userInteractionsArray count];
+    int minimumHeight;
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        minimumHeight = MINIMUM_INTERACTION_HEIGHT_IPAD;
+    } else {
+        minimumHeight = MINIMUM_INTERACTION_HEIGHT_IPHONE;
+    }
+    
     if (indexPath.row >= userInteractions) {
-        return MINIMUM_INTERACTION_HEIGHT;
+        return minimumHeight;
     }
     
     InteractionCell *interactionCell;
@@ -185,13 +198,9 @@
     } else {
         interactionCell = [[SmallInteractionCell alloc] init];
     }
-    int height = [interactionCell setInteraction:[appDelegate.userInteractionsArray objectAtIndex:(indexPath.row)] withWidth:self.frame.size.width - 20] + 30;
-    if (height < MINIMUM_INTERACTION_HEIGHT) {
-        return MINIMUM_INTERACTION_HEIGHT;
-    } else {
-        return height;
-    }
+    int height = [interactionCell setInteraction:[appDelegate.userInteractionsArray objectAtIndex:(indexPath.row)] withWidth:self.frame.size.width - 20];
 
+    return height;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -201,7 +210,7 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {    
-    int userInteractionsCount = [appDelegate.userInteractionsArray count];
+    NSInteger userInteractionsCount = [appDelegate.userInteractionsArray count];
     return userInteractionsCount + 1;
 }
 
@@ -230,13 +239,14 @@
         
         // update the cell information
         [cell setInteraction:interaction withWidth: self.frame.size.width - 20];
+        [cell layoutSubviews];
     }
     
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    int userInteractions = [appDelegate.userInteractionsArray count];
+    NSInteger userInteractions = [appDelegate.userInteractionsArray count];
     if (indexPath.row < userInteractions) {
         NSDictionary *interaction = [appDelegate.userInteractionsArray objectAtIndex:indexPath.row];
         NSString *category = [interaction objectForKey:@"category"];
@@ -289,7 +299,13 @@
     if (self.pageFinished) {
         UIImage *img = [UIImage imageNamed:@"fleuron.png"];
         UIImageView *fleuron = [[UIImageView alloc] initWithImage:img];
-        int height = MINIMUM_INTERACTION_HEIGHT;
+        
+        int height;
+        if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+            height = MINIMUM_INTERACTION_HEIGHT_IPAD;
+        } else {
+            height = MINIMUM_INTERACTION_HEIGHT_IPHONE;
+        }
         
         fleuron.frame = CGRectMake(0, 0, self.frame.size.width, height);
         fleuron.contentMode = UIViewContentModeCenter;
