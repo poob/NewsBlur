@@ -677,8 +677,8 @@ class MSocialProfile(mongo.Document):
         map_f = """
             function() {
                 var date = (this.shared_date.getFullYear()) + "-" + (this.shared_date.getMonth()+1);
-                var hour = this.story_date.getHours();
-                var day = this.story_date.getDay();
+                var hour = this.shared_date.getHours();
+                var day = this.shared_date.getDay();
                 emit(this.story_hash, {'month': date, 'hour': hour, 'day': day});
             }
         """
