@@ -18,10 +18,9 @@ import com.newsblur.database.FeedProvider;
 import com.newsblur.domain.Feed;
 import com.newsblur.fragment.DeleteFeedFragment;
 import com.newsblur.fragment.FeedItemListFragment;
-import com.newsblur.fragment.SyncUpdateFragment;
 import com.newsblur.network.APIManager;
 import com.newsblur.network.MarkFeedAsReadTask;
-import com.newsblur.service.SyncService;
+import com.newsblur.util.FeedUtils;
 import com.newsblur.util.PrefsUtils;
 import com.newsblur.util.ReadFilter;
 import com.newsblur.util.StoryOrder;
@@ -51,6 +50,7 @@ public class FeedItemsList extends ItemsList {
             Feed feed = Feed.fromCursor(cursor);
             setTitle(feed.title);
         }
+        cursor.close();
 
 		itemListFragment = (FeedItemListFragment) fragmentManager.findFragmentByTag(FeedItemListFragment.class.getName());
 		if (itemListFragment == null) {
@@ -59,13 +59,6 @@ public class FeedItemsList extends ItemsList {
 			FragmentTransaction listTransaction = fragmentManager.beginTransaction();
 			listTransaction.add(R.id.activity_itemlist_container, itemListFragment, FeedItemListFragment.class.getName());
 			listTransaction.commit();
-		}
-
-		syncFragment = (SyncUpdateFragment) fragmentManager.findFragmentByTag(SyncUpdateFragment.TAG);
-		if (syncFragment == null) {
-			syncFragment = new SyncUpdateFragment();
-			fragmentManager.beginTransaction().add(syncFragment, SyncUpdateFragment.TAG).commit();
-			triggerRefresh(1);
 		}
 	}
 	
@@ -122,14 +115,7 @@ public class FeedItemsList extends ItemsList {
 	public void triggerRefresh(int page) {
 		if (!stopLoading) {
 			setSupportProgressBarIndeterminateVisibility(true);
-			final Intent intent = new Intent(Intent.ACTION_SYNC, null, this, SyncService.class);
-			intent.putExtra(SyncService.EXTRA_STATUS_RECEIVER, syncFragment.receiver);
-			intent.putExtra(SyncService.EXTRA_TASK_TYPE, SyncService.TaskType.FEED_UPDATE);
-			intent.putExtra(SyncService.EXTRA_TASK_PAGE_NUMBER, Integer.toString(page));
-			intent.putExtra(SyncService.EXTRA_TASK_FEED_ID, feedId);
-            intent.putExtra(SyncService.EXTRA_TASK_ORDER, getStoryOrder());
-            intent.putExtra(SyncService.EXTRA_TASK_READ_FILTER, PrefsUtils.getReadFilterForFeed(this, feedId));
-			startService(intent);
+            FeedUtils.updateFeed(this, this, feedId, page, getStoryOrder(), PrefsUtils.getReadFilterForFeed(this, feedId));
 		}
 	}
 
